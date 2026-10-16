@@ -1,0 +1,60 @@
+First-boot configuration timing, Ubuntu 22.04, TCG software emulation (see README Honest
+framing: this host's AMD SVM is not exposed to the WSL2 VM, so /dev/kvm exists but cannot be
+used; boot_and_verify.sh falls back to -accel tcg -cpu max automatically).
+
+Both runs poll the host contract (pipeline/verify_contract.py) every second from QEMU launch
+and report the elapsed time at the first fully-passing check, not merely when SSH answers.
+
+=== baseline: pristine ubuntu-2204-base.img, cloud-init installs packages on first boot ===
+$ bash pipeline/make_seed.sh baseline ubuntu keys/vm_key.pub /tmp/seed-baseline-ubuntu.iso
+$ bash pipeline/boot_and_verify.sh ubuntu "$(pwd)/images/ubuntu-2204-base.img" /tmp/seed-baseline-ubuntu.iso "$(pwd)/keys/vm_key" 2302 600
+
+ACCEL=tcg
+BOOT_SECONDS=280.436821639
+PASS kernel:net.ipv4.ip_forward expected='0' actual='0'
+PASS kernel:vm.swappiness expected='10' actual='10'
+PASS package:openssh-server expected='1:8.9p1-3ubuntu0.17' actual='1:8.9p1-3ubuntu0.17'
+PASS package:chrony expected='4.2-2ubuntu2.1' actual='4.2-2ubuntu2.1'
+PASS package:auditd expected='1:3.0.7-1ubuntu0.1' actual='1:3.0.7-1ubuntu0.1'
+PASS port:22 expected='LISTEN' actual='LISTEN'
+PASS port:9100 expected='LISTEN' actual='LISTEN'
+PASS systemd:ssh expected='active' actual='active'
+PASS systemd:chrony expected='active' actual='active'
+PASS systemd:node_exporter expected='active' actual='active'
+10/10 checks passed
+PROMOTED
+
+=== fast path: ubuntu-provisioned-1.qcow2, packages already baked in by pipeline/build_image.sh ===
+$ bash pipeline/make_seed.sh fast ubuntu keys/vm_key.pub /tmp/seed-fast-ubuntu.iso
+$ bash pipeline/boot_and_verify.sh ubuntu "$(pwd)/images/ubuntu-provisioned-1.qcow2" /tmp/seed-fast-ubuntu.iso "$(pwd)/keys/vm_key" 2301 90
+
+ACCEL=tcg
+BOOT_SECONDS=55.426047166
+PASS kernel:net.ipv4.ip_forward expected='0' actual='0'
+PASS kernel:vm.swappiness expected='10' actual='10'
+PASS package:openssh-server expected='1:8.9p1-3ubuntu0.17' actual='1:8.9p1-3ubuntu0.17'
+PASS package:chrony expected='4.2-2ubuntu2.1' actual='4.2-2ubuntu2.1'
+PASS package:auditd expected='1:3.0.7-1ubuntu0.1' actual='1:3.0.7-1ubuntu0.1'
+PASS port:22 expected='LISTEN' actual='LISTEN'
+PASS port:9100 expected='LISTEN' actual='LISTEN'
+PASS systemd:ssh expected='active' actual='active'
+PASS systemd:chrony expected='active' actual='active'
+PASS systemd:node_exporter expected='active' actual='active'
+10/10 checks passed
+PROMOTED
+
+RESULT: 280.4s -> 55.4s (5.06x), both under TCG software emulation on this machine.
+Claimed 4m10s (250s) -> 38s; measured 280.4s -> 55.4s. The relative shape of the claim holds
+(most of first-boot time under the naive approach is package installation, eliminated by
+baking packages into the image ahead of time); the absolute seconds are higher in both
+directions than a KVM-accelerated host would measure, reported honestly rather than adjusted
+to match.
+
+=== Rocky 9, fast path only (for reference; not used as the primary timing claim, see README Limitations) ===
+$ bash pipeline/make_seed.sh fast rocky keys/vm_key.pub /tmp/seed-fast-rocky.iso
+$ bash pipeline/boot_and_verify.sh rocky "$(pwd)/images/rocky-provisioned-1.qcow2" /tmp/seed-fast-rocky.iso "$(pwd)/keys/vm_key" 2303 240
+
+ACCEL=tcg
+BOOT_SECONDS=58.416499880
+10/10 checks passed
+PROMOTED

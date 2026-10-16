@@ -1,0 +1,7 @@
+images/
+keys/
+*.iso
+*.pid
+*.log
+__pycache__/
+*.pyc

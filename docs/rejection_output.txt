@@ -1,0 +1,38 @@
+7 deliberately broken clones of ubuntu-provisioned-1.qcow2 (pipeline/make_broken_image.sh),
+each mutating exactly one contract-relevant fact on the already-good provisioned image, booted
+fresh and checked once (pipeline/reject_check.sh, no retry-until-pass: a single real
+promotion decision per image).
+
+fault 1 (sysctl vm.swappiness set to 99): REJECTED
+  9/10 checks passed
+  - kernel:vm.swappiness expected='10' actual='99'
+
+fault 2 (sysctl net.ipv4.ip_forward set to 1): REJECTED
+  9/10 checks passed
+  - kernel:net.ipv4.ip_forward expected='0' actual='1'
+
+fault 3 (chrony package purged): REJECTED
+  8/10 checks passed
+  - package:chrony expected='4.2-2ubuntu2.1' actual=None
+  - systemd:chrony expected='active' actual='inactive'
+
+fault 4 (auditd package purged): REJECTED
+  9/10 checks passed
+  - package:auditd expected='1:3.0.7-1ubuntu0.1' actual=None
+
+fault 5 (node_exporter unit disabled): REJECTED
+  8/10 checks passed
+  - port:9100 expected='LISTEN' actual='not listening'
+  - systemd:node_exporter expected='active' actual='inactive'
+
+fault 6 (chrony unit disabled, package left installed): REJECTED
+  9/10 checks passed
+  - systemd:chrony expected='active' actual='inactive'
+
+fault 7 (node_exporter stub moved to port 9101, unit still enabled and running): REJECTED
+  9/10 checks passed
+  - port:9100 expected='LISTEN' actual='not listening'
+
+RESULT: 7 of 7 broken images rejected, each naming the specific failing check(s) that caused
+the rejection. No image was promoted that should have been rejected, and every rejection names
+a check that corresponds exactly to the fault that was seeded.

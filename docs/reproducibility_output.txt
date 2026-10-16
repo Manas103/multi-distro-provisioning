@@ -1,0 +1,30 @@
+=== rebuild 1/10 (ubuntu) through rebuild 10/10 (ubuntu) ===
+Each rebuild: fresh qcow2 overlay on the same pristine ubuntu-2204-base.img, mounted via
+qemu-nbd, provisioned via ansible-playbook over the chroot connection plugin (apt-get, sysctl,
+node_exporter stub, systemd unit enable), package manifest dumped with
+`dpkg-query -W -f='${Package} ${Version}\n' | sort`, then unmounted and disconnected.
+Full per-rebuild ansible-playbook output is elided here (10 near-identical "PLAY RECAP: ok=7
+changed=5 unreachable=0 failed=0 skipped=4" runs); the comparison is what this claim measures.
+
+=== comparing 10 manifests ===
+rebuild 2: identical to rebuild 1
+rebuild 3: identical to rebuild 1
+rebuild 4: identical to rebuild 1
+rebuild 5: identical to rebuild 1
+rebuild 6: identical to rebuild 1
+rebuild 7: identical to rebuild 1
+rebuild 8: identical to rebuild 1
+rebuild 9: identical to rebuild 1
+rebuild 10: identical to rebuild 1
+RESULT: 10 of 10 rebuilds byte-identical
+
+aad22b7e703fc9b54645bc127348519ae81dfb03d44e67a98dd0a626ca2d963c  rebuild-1.qcow2.manifest.txt
+aad22b7e703fc9b54645bc127348519ae81dfb03d44e67a98dd0a626ca2d963c  rebuild-2.qcow2.manifest.txt
+aad22b7e703fc9b54645bc127348519ae81dfb03d44e67a98dd0a626ca2d963c  rebuild-3.qcow2.manifest.txt
+aad22b7e703fc9b54645bc127348519ae81dfb03d44e67a98dd0a626ca2d963c  rebuild-4.qcow2.manifest.txt
+aad22b7e703fc9b54645bc127348519ae81dfb03d44e67a98dd0a626ca2d963c  rebuild-5.qcow2.manifest.txt
+aad22b7e703fc9b54645bc127348519ae81dfb03d44e67a98dd0a626ca2d963c  rebuild-6.qcow2.manifest.txt
+aad22b7e703fc9b54645bc127348519ae81dfb03d44e67a98dd0a626ca2d963c  rebuild-7.qcow2.manifest.txt
+aad22b7e703fc9b54645bc127348519ae81dfb03d44e67a98dd0a626ca2d963c  rebuild-8.qcow2.manifest.txt
+aad22b7e703fc9b54645bc127348519ae81dfb03d44e67a98dd0a626ca2d963c  rebuild-9.qcow2.manifest.txt
+aad22b7e703fc9b54645bc127348519ae81dfb03d44e67a98dd0a626ca2d963c  rebuild-10.qcow2.manifest.txt

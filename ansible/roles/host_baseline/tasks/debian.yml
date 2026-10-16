@@ -1,0 +1,10 @@
+---
+# update_cache is deliberately false: the point of this pipeline is that provisioning is
+# reproducible from the same pristine base image every time, and an apt-get update pulling
+# whatever the mirror happens to be serving on a given day is a variable this role doesn't
+# need. The base image's own baked-in index is what every rebuild uses.
+- name: Install baseline packages (apt)
+  apt:
+    name: "{{ baseline_packages_debian }}"
+    state: present
+    update_cache: false

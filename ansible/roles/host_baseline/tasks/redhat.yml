@@ -1,0 +1,5 @@
+---
+- name: Install baseline packages (dnf)
+  dnf:
+    name: "{{ baseline_packages_redhat }}"
+    state: present

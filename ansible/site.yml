@@ -1,0 +1,6 @@
+---
+- name: Apply the host baseline role to a mounted image chroot
+  hosts: all
+  gather_facts: true
+  roles:
+    - host_baseline

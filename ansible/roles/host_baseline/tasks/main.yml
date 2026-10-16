@@ -1,0 +1,102 @@
+---
+# One role set, two distributions: the only branch point is package manager naming
+# (ansible_os_family), everything downstream (sysctl keys, unit names, the stub metrics
+# service) is identical so the same contract applies to both images.
+
+- name: Include Debian-family tasks
+  include_tasks: debian.yml
+  when: ansible_os_family == "Debian"
+
+- name: Include RedHat-family tasks
+  include_tasks: redhat.yml
+  when: ansible_os_family == "RedHat"
+
+- name: Declare kernel tuning for next boot
+  # reload: false because provisioning runs against a chroot with no /proc mounted; the real
+  # boot that follows applies /etc/sysctl.d via systemd-sysctl.service, which is what
+  # boot_and_verify.sh actually checks.
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/99-host-baseline.conf
+    reload: false
+  loop: "{{ baseline_sysctl | dict2items }}"
+
+- name: Install the node_exporter stand-in (a trivial HTTP listener on 9100)
+  copy:
+    dest: /usr/local/bin/node-exporter-stub.py
+    mode: "0755"
+    content: |
+      #!/usr/bin/env python3
+      # Stands in for the real Prometheus node_exporter: this pipeline's point is the
+      # provisioning and boot-verify gate, not a metrics exporter, but the contract checks a
+      # real listening port and a real systemd unit, so this is a genuine (if trivial) HTTP
+      # server actually bound to 9100, not a faked fact.
+      import http.server
+      http.server.HTTPServer(("0.0.0.0", 9100), http.server.BaseHTTPRequestHandler).serve_forever()
+
+- name: Install the node_exporter stand-in systemd unit
+  copy:
+    dest: /etc/systemd/system/node_exporter.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=node_exporter stand-in (see host_baseline role)
+      After=network.target
+
+      [Service]
+      ExecStart=/usr/bin/python3 /usr/local/bin/node-exporter-stub.py
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Write the SELinux relabel helper
+  # Provisioning writes files from outside a running SELinux kernel (the Ubuntu control host
+  # has none), so every file this role creates lands with the unlabeled_t context instead of
+  # the policy's real one, and systemd-sysctl.service refuses to read an unlabeled file
+  # ("Permission denied" despite correct Unix permissions; see README Findings). restorecon
+  # itself first checks is_selinux_enabled() on the *running* kernel and silently no-ops when
+  # it is false, which it always is here (chrooted under a non-SELinux Ubuntu kernel), so
+  # restorecon cannot be used from this build path. selinux.matchpathcon()/lsetfilecon() read
+  # and apply the guest's own policy database directly and do not perform that running-kernel
+  # check, so they work from a plain chroot.
+  copy:
+    dest: /tmp/host_baseline_relabel.py
+    mode: "0755"
+    content: |
+      import selinux
+      targets = [
+          "/etc/sysctl.d/99-host-baseline.conf",
+          "/etc/systemd/system/node_exporter.service",
+          "/usr/local/bin/node-exporter-stub.py",
+      ]
+      for path in targets:
+          rc, ctx = selinux.matchpathcon(path, 0)
+          if rc != 0:
+              raise SystemExit(f"matchpathcon failed for {path}")
+          rc2 = selinux.lsetfilecon(path, ctx)
+          if rc2 != 0:
+              raise SystemExit(f"lsetfilecon failed for {path}")
+          print(f"{path}: {ctx}")
+  when: ansible_os_family == "RedHat"
+
+- name: Relabel the files this role wrote (SELinux)
+  command: python3 /tmp/host_baseline_relabel.py
+  when: ansible_os_family == "RedHat"
+  changed_when: true
+
+- name: Remove the SELinux relabel helper
+  file:
+    path: /tmp/host_baseline_relabel.py
+    state: absent
+  when: ansible_os_family == "RedHat"
+
+- name: Enable the contract's systemd units for next boot
+  # Provisioning runs against a chroot (no running init), so units are enabled here and
+  # actually start on the real boot that follows; boot_and_verify.sh is what checks "active".
+  systemd:
+    name: "{{ item }}"
+    enabled: true
+    daemon_reload: true
+  loop: "{{ baseline_units_debian if ansible_os_family == 'Debian' else baseline_units_redhat }}"

@@ -1,0 +1,32 @@
+---
+# Package names differ between apt and dnf naming; everything else in the contract (sysctl
+# keys, port list, unit names) is identical across both distributions.
+baseline_sysctl:
+  net.ipv4.ip_forward: "0"
+  vm.swappiness: "10"
+
+baseline_packages_debian:
+  - openssh-server
+  - chrony
+  - auditd
+  - python3
+
+baseline_packages_redhat:
+  - openssh-server
+  - chrony
+  - audit
+  - python3
+  - policycoreutils  # provides restorecon, needed to relabel files this role writes (SELinux)
+
+# Two of the three unit names differ across families: Ubuntu ships ssh.service and
+# chrony.service; Rocky/RHEL ships sshd.service and chronyd.service. contract.toml mirrors
+# this per-distro, which is also why verify_contract.py takes a distro argument.
+baseline_units_debian:
+  - ssh
+  - chrony
+  - node_exporter
+
+baseline_units_redhat:
+  - sshd
+  - chronyd
+  - node_exporter

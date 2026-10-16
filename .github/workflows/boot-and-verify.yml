@@ -1,0 +1,41 @@
+name: boot-and-verify
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  boot-and-verify-ubuntu:
+    # GitHub-hosted Linux runners expose /dev/kvm; this job boots the real Ubuntu cloud image
+    # under real KVM acceleration and runs the same host-contract gate pipeline/boot_and_verify.sh
+    # runs locally, so the CI mechanics and the measured numbers in the README exercise the
+    # same code path. The provisioning-reproducibility and timing claims are measured locally
+    # (see docs/); this job demonstrates that the boot-and-verify gate itself runs on a
+    # GitHub-hosted KVM runner, not only on this machine.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils genisoimage bc
+      - name: Check KVM is available
+        run: test -e /dev/kvm && ls -la /dev/kvm
+      - name: Generate test SSH key
+        run: ssh-keygen -t ed25519 -N '' -f "$RUNNER_TEMP/ci_key" -q
+      - name: Download Ubuntu 22.04 cloud image
+        run: curl -fL -o "$RUNNER_TEMP/ubuntu-2204-base.img" https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img
+      - name: Build the fast-path seed
+        run: bash pipeline/make_seed.sh fast ubuntu "$RUNNER_TEMP/ci_key.pub" "$RUNNER_TEMP/seed.iso"
+      - name: Boot the pristine base image and run the contract gate
+        # Expected to reject: the pristine base image has none of host_baseline's packages or
+        # units, which is exactly what the gate exists to catch. pipeline/build_image.sh's
+        # provisioned images are what the gate is meant to promote; this job exercises the
+        # reject path on real GitHub-hosted KVM.
+        run: |
+          set +e
+          bash pipeline/boot_and_verify.sh ubuntu "$RUNNER_TEMP/ubuntu-2204-base.img" "$RUNNER_TEMP/seed.iso" "$RUNNER_TEMP/ci_key" 2222 120
+          CODE=$?
+          echo "boot_and_verify exit code: $CODE"
+          test "$CODE" -eq 1
